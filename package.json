@@ -24,7 +24,7 @@
 		"type": "git",
 		"url": "https://github.com/swrlab/react-native-music-control.git"
 	},
-	"author": "Tanguy Antoine",
+	"author": "Felipe Garcia (iSharelife)",
 	"peerDependencies": {
 		"react-native": ">=0.60.0"
 	},
