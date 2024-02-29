@@ -503,7 +503,7 @@ public class MusicControlModule extends ReactContextBaseJavaModule implements Co
                 @Override
                 public void run() {
                     try {
-                        Bitmap bitmap = loadArtwork(artworkUrl, true);
+                        Bitmap bitmap = loadArtwork(artwork, true);
 
                         if (session != null) {
                             MediaMetadataCompat currentMetadata = session.getController().getMetadata();
