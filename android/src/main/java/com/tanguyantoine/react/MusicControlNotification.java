@@ -307,7 +307,10 @@ public class MusicControlNotification {
 
                 try {
                     Notification notification = MusicControlModule.INSTANCE.notification
-                            .prepareNotification(MusicControlModule.INSTANCE.nb, false);
+                            .prepareNotification(MusicControlModule.INSTANCE.nb, true);
+                    if (MusicControlModule.INSTANCE != null || MusicControlModule.INSTANCE.notification != null) {
+                        MusicControlModule.INSTANCE.updateInfo();
+                    }
 
                     // Call startForeground to promote the service to a foreground service
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -346,7 +349,10 @@ public class MusicControlNotification {
                 // // Set the MusicControlModule instance for the service
                 // setMusicControlModule(MusicControlModule.INSTANCE);
                 notification = MusicControlModule.INSTANCE.notification
-                        .prepareNotification(MusicControlModule.INSTANCE.nb, false);
+                        .prepareNotification(MusicControlModule.INSTANCE.nb, true);
+                if (MusicControlModule.INSTANCE != null || MusicControlModule.INSTANCE.notification != null) {
+                    MusicControlModule.INSTANCE.updateInfo();
+                }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     // add foreground service type for Android >= Q
                     startForeground(MusicControlModule.INSTANCE.getNotificationId(), notification,
@@ -385,7 +391,10 @@ public class MusicControlNotification {
                 }
                 try {
                     notification = MusicControlModule.INSTANCE.notification
-                            .prepareNotification(MusicControlModule.INSTANCE.nb, false);
+                            .prepareNotification(MusicControlModule.INSTANCE.nb, true);
+                    if (MusicControlModule.INSTANCE != null || MusicControlModule.INSTANCE.notification != null) {
+                        MusicControlModule.INSTANCE.updateInfo();
+                    }
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         // add foreground service type for Android >= Q
                         startForeground(MusicControlModule.INSTANCE.getNotificationId(), notification,
