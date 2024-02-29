@@ -22,7 +22,7 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/swrlab/react-native-music-control.git"
+		"url": "https://github.com/iShareLife/react-native-music-control"
 	},
 	"author": "Felipe Garcia (iSharelife)",
 	"peerDependencies": {
@@ -40,11 +40,11 @@
 		"semantic-release": "semantic-release"
 	},
 	"devDependencies": {
-		"@semantic-release/changelog": "^6.0.2",
+		"@semantic-release/changelog": "^6.0.3",
 		"@semantic-release/git": "^10.0.1",
 		"@types/react-native": "^0.70.8",
-		"react-native": "^0.70.6",
+		"react-native": "^0.73.3",
 		"semantic-release": "^19.0.5",
-		"typescript": "^4.9.4"
+		"typescript": "^5.3.3"
 	}
 }

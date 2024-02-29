@@ -75,6 +75,7 @@ public class MusicControlModule extends ReactContextBaseJavaModule implements Co
 
     private String channelId = "react-native-music-control";
     private int notificationId = 100;
+    private final Object initLock = new Object();
 
     public MusicControlModule(ReactApplicationContext context) {
         super(context);
@@ -159,81 +160,107 @@ public class MusicControlModule extends ReactContextBaseJavaModule implements Co
     }
 
     public void init() {
-        if (init)
-            return;
+        synchronized (initLock) {
+            if (init)
+                return;
 
-        INSTANCE = this;
+            INSTANCE = this;
 
-        context = getReactApplicationContext();
+            context = getReactApplicationContext();
 
-        emitter = new MusicControlEventEmitter(context, notificationId);
+            emitter = new MusicControlEventEmitter(context, notificationId);
 
-        session = new MediaSessionCompat(context, "MusicControl");
-        session.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS |
-                MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+            session = new MediaSessionCompat(context, "MusicControl");
+            session.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS |
+                    MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
 
-        session.setCallback(new MediaSessionCallback(emitter));
+            session.setCallback(new MediaSessionCallback(emitter));
 
-        volume = new MusicControlVolumeListener(context, emitter, true, 100, 100);
-        if (remoteVolume) {
-            session.setPlaybackToRemote(volume);
-        } else {
-            session.setPlaybackToLocal(AudioManager.STREAM_MUSIC);
-        }
-
-        md = new MediaMetadataCompat.Builder();
-        pb = new PlaybackStateCompat.Builder();
-        pb.setActions(controls);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            createChannel(context);
-        }
-        nb = new NotificationCompat.Builder(context, channelId);
-        nb.setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
-        nb.setPriority(NotificationCompat.PRIORITY_HIGH);
-
-        updateNotificationMediaStyle();
-
-        state = pb.build();
-
-        notification = new MusicControlNotification(this, context);
-        notification.updateActions(controls, skipOptions);
-
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(MusicControlNotification.REMOVE_NOTIFICATION);
-        filter.addAction(MusicControlNotification.MEDIA_BUTTON);
-        filter.addAction(Intent.ACTION_MEDIA_BUTTON);
-        filter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
-        receiver = new MusicControlReceiver(this, context);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            context.registerReceiver(receiver, filter);
-        }
-
-        Intent myIntent = new Intent(context, MusicControlNotification.NotificationService.class);
-
-        afListener = new MusicControlAudioFocusListener(context, emitter, volume);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Try to bind the service
-            try {
-                context.bindService(myIntent, connection, Context.BIND_AUTO_CREATE);
-            } catch (Exception ignored) {
-                ContextCompat.startForegroundService(context, myIntent);
+            volume = new MusicControlVolumeListener(context, emitter, true, 100, 100);
+            if (volume != null && remoteVolume) {
+                session.setPlaybackToRemote(volume);
+            } else {
+                session.setPlaybackToLocal(AudioManager.STREAM_MUSIC);
             }
-        } else {
-            context.startService(myIntent);
+
+            md = new MediaMetadataCompat.Builder();
+            pb = new PlaybackStateCompat.Builder();
+            pb.setActions(controls);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                createChannel(context);
+            }
+            nb = new NotificationCompat.Builder(context, channelId);
+            nb.setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+            nb.setPriority(NotificationCompat.PRIORITY_HIGH);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                nb.setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+            }
+
+            updateNotificationMediaStyle();
+
+            state = pb.build();
+
+            notification = new MusicControlNotification(this, context);
+            notification.updateActions(controls, skipOptions);
+
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(MusicControlNotification.REMOVE_NOTIFICATION);
+            filter.addAction(MusicControlNotification.MEDIA_BUTTON);
+            filter.addAction(Intent.ACTION_MEDIA_BUTTON);
+            filter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+            receiver = new MusicControlReceiver(this, context);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(receiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                context.registerReceiver(receiver, filter);
+            }
+
+            Intent myIntent = new Intent(context, MusicControlNotification.NotificationService.class);
+
+            afListener = new MusicControlAudioFocusListener(context, emitter, volume);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                // For Android 8.0 (Oreo) and above, try to bind the service
+                try {
+                    context.bindService(myIntent, connection, Context.BIND_AUTO_CREATE);
+                } catch (Exception ignored) {
+                    ContextCompat.startForegroundService(context, myIntent);
+                }
+            } else {
+                // For Android versions below 8.0
+                try {
+                    context.startService(myIntent);
+                } catch (Exception e) {
+                    // Handle exception or try an alternative approach
+                    // For example, binding to the service as a fallback
+                    context.bindService(myIntent, connection, Context.BIND_AUTO_CREATE);
+                }
+            }
+
+            context.registerComponentCallbacks(this);
+
+            isPlaying = false;
+            init = true;
         }
+    }
 
-        context.registerComponentCallbacks(this);
+    public void appReturningToForeground() {
+        AudioManager am = (AudioManager) this.context.getSystemService(Context.AUDIO_SERVICE);
+        Log.d("RNMC", "*** INFO: appReturningToForeground ***");
 
-        isPlaying = false;
-        init = true;
+        // Check if we are the ones playing music
+        if (am.isMusicActive() && MusicControlModule.INSTANCE != null && MusicControlModule.INSTANCE.isPlaying()) {
+            // Bind to NotificationService
+            Log.d("RNMC", "*** INFO: Binding to NotificationService ***");
+            Intent intent = new Intent(context, MusicControlNotification.NotificationService.class);
+            context.bindService(intent, connection, Context.BIND_AUTO_CREATE);
+        }
     }
 
     // Create the service connection.
-    private ServiceConnection connection = new ServiceConnection() {
+    private final ServiceConnection connection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             Log.w(TAG, "onServiceConnected");
@@ -313,10 +340,20 @@ public class MusicControlModule extends ReactContextBaseJavaModule implements Co
 
     @ReactMethod
     public void observeAudioInterruptions(boolean enable) {
-        if (enable) {
-            afListener.requestAudioFocus();
-        } else {
-            afListener.abandonAudioFocus();
+        try {
+            if (afListener != null) {
+                if (enable) {
+                    afListener.requestAudioFocus();
+                } else {
+                    afListener.abandonAudioFocus();
+                }
+            } else {
+                throw new NullPointerException("afListener is null");
+            }
+        } catch (NullPointerException e) {
+            // Handle the exception here
+            // Log an error, display a message, or take appropriate action
+            e.printStackTrace();
         }
     }
 
@@ -436,53 +473,61 @@ public class MusicControlModule extends ReactContextBaseJavaModule implements Co
 
     @ReactMethod
     synchronized public void updatePlayback(ReadableMap info) {
-        init();
-        if (notification == null)
-            return;
-
-        long updateTime;
-        long elapsedTime;
-        long bufferedTime = info.hasKey("bufferedTime") ? (long) (info.getDouble("bufferedTime") * 1000)
-                : state.getBufferedPosition();
-        float speed = info.hasKey("speed") ? (float) info.getDouble("speed") : state.getPlaybackSpeed();
-        int pbState = info.hasKey("state") ? info.getInt("state") : state.getState();
-        int maxVol = info.hasKey("maxVolume") ? info.getInt("maxVolume") : volume.getMaxVolume();
-        int vol = info.hasKey("volume") ? info.getInt("volume") : volume.getCurrentVolume();
-        ratingType = info.hasKey("rating") ? info.getInt("rating") : ratingType;
-
-        isPlaying = pbState == PlaybackStateCompat.STATE_PLAYING || pbState == PlaybackStateCompat.STATE_BUFFERING;
-
-        // The default speed is 0 if it was never supplied. Adjust this to 1 if player
-        // is playing to ensure that the seek bar progresses properly
-        if (isPlaying && speed == 0) {
-            speed = 1;
+        synchronized (initLock) {
+            init();
         }
 
-        if (info.hasKey("elapsedTime")) {
-            elapsedTime = (long) (info.getDouble("elapsedTime") * 1000);
-            updateTime = SystemClock.elapsedRealtime();
-        } else {
-            elapsedTime = state.getPosition();
-            updateTime = state.getLastPositionUpdateTime();
+        synchronized (this) {
+            if (notification == null)
+                return;
+
+            long updateTime;
+            long elapsedTime;
+            long bufferedTime = info.hasKey("bufferedTime") ? (long) (info.getDouble("bufferedTime") * 1000)
+                    : state.getBufferedPosition();
+            float speed = info.hasKey("speed") ? (float) info.getDouble("speed") : state.getPlaybackSpeed();
+            int pbState = info.hasKey("state") ? info.getInt("state") : state.getState();
+            int maxVol = info.hasKey("maxVolume") ? info.getInt("maxVolume") : volume.getMaxVolume();
+            int vol = info.hasKey("volume") ? info.getInt("volume") : volume.getCurrentVolume();
+            ratingType = info.hasKey("rating") ? info.getInt("rating") : ratingType;
+
+            isPlaying = pbState == PlaybackStateCompat.STATE_PLAYING || pbState == PlaybackStateCompat.STATE_BUFFERING;
+
+            // The default speed is 0 if it was never supplied. Adjust this to 1 if player
+            // is playing to ensure that the seek bar progresses properly
+            if (isPlaying && speed == 0) {
+                speed = 1;
+            }
+
+            if (info.hasKey("elapsedTime")) {
+                elapsedTime = (long) (info.getDouble("elapsedTime") * 1000);
+                updateTime = SystemClock.elapsedRealtime();
+            } else {
+                elapsedTime = state.getPosition();
+                updateTime = state.getLastPositionUpdateTime();
+            }
+
+            pb.setState(pbState, elapsedTime, speed, updateTime);
+            pb.setBufferedPosition(bufferedTime);
+            pb.setActions(controls);
+
+            if (session.isActive())
+                notification.show(nb, isPlaying);
+
+            state = pb.build();
+            session.setPlaybackState(state);
+
+            session.setRatingType(ratingType);
+
+            if (volume != null) {
+                if (remoteVolume) {
+                    session.setPlaybackToRemote(volume.create(null, maxVol, vol));
+                } else {
+                    session.setPlaybackToLocal(AudioManager.STREAM_MUSIC);
+                }
+            }
         }
 
-        pb.setState(pbState, elapsedTime, speed, updateTime);
-        pb.setBufferedPosition(bufferedTime);
-        pb.setActions(controls);
-
-        if (session.isActive())
-            notification.show(nb, isPlaying);
-
-        state = pb.build();
-        session.setPlaybackState(state);
-
-        session.setRatingType(ratingType);
-
-        if (remoteVolume) {
-            session.setPlaybackToRemote(volume.create(null, maxVol, vol));
-        } else {
-            session.setPlaybackToLocal(AudioManager.STREAM_MUSIC);
-        }
     }
 
     @ReactMethod
@@ -497,7 +542,8 @@ public class MusicControlModule extends ReactContextBaseJavaModule implements Co
 
         if (notification != null)
             notification.hide();
-        session.setActive(false);
+        if (session != null)
+            session.setActive(false);
     }
 
     @ReactMethod
@@ -606,7 +652,7 @@ public class MusicControlModule extends ReactContextBaseJavaModule implements Co
 
                 if (image instanceof BitmapDrawable) {
                     bitmap = ((BitmapDrawable) image).getBitmap();
-                } else {
+                } else if (image != null) {
                     bitmap = BitmapFactory.decodeFile(url);
                 }
             } else {

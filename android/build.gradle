@@ -41,4 +41,6 @@ dependencies {
     compileOnly 'com.facebook.react:react-native:+'
     implementation 'androidx.core:core:1.8.0'
     implementation 'androidx.media:media:1.6.0'
+    implementation 'androidx.lifecycle:lifecycle-process:2.6.1'
+    implementation "androidx.lifecycle:lifecycle-runtime:2.6.1"
 }

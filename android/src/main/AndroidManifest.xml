@@ -1,8 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="com.tanguyantoine.react">
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <application>
-        <service android:stopWithTask="true" android:name=".MusicControlNotification$NotificationService" android:foregroundServiceType="mediaPlayback" />
+        <service android:stopWithTask="true"
+            android:name=".MusicControlNotification$NotificationService"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 
 </manifest>
